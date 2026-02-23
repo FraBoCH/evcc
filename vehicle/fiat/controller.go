@@ -62,10 +62,10 @@ func (c *Controller) ChargeEnable(enable bool) error {
 
 	if enable {
 		// Start charging from now until end of day (23:55)
-		hasChanged = c.configureChargeSchedule(&stat.EvInfo.Schedules[0], now, time.Time{})
+		hasChanged = hasChanged || c.configureChargeSchedule(&stat.EvInfo.Schedules[0], now, time.Time{})
 	} else {
-		// Stop charging: set charge end time to now to stop charging immediately (use empty time to keep start time as it was for history in Fiat app)
-		hasChanged = c.configureChargeSchedule(&stat.EvInfo.Schedules[0], time.Time{}, now)
+		// Stop charging: set charge end time to now to stop charging as soon as possible (within the next 5 minutes, due to 5-minute rounding; use empty time to keep start time as it was for history in Fiat app)
+		hasChanged = hasChanged || c.configureChargeSchedule(&stat.EvInfo.Schedules[0], time.Time{}, now)
 	}
 
 	// make sure the other charge schedules are disabled in case user changed them
@@ -103,7 +103,7 @@ func (c *Controller) configureChargeSchedule(schedule *Schedule, start time.Time
 		minTimeInterval   = 5 * time.Minute // Minimum time interval accepted by Fiat API in schedules; used for rounding up start and end time to avoid API rejections
 		timeFormat        = "15:04"         // Hours & minutes only
 		defaultEndTime    = "23:55"         // Default end time to use when enabling charge; this is the last time of the day accepted by the Fiat API
-		fallbackStartTime = "00:05"         // Fallback time for schedules crossing midnight; this is the first time of the day accepted by the Fiat API after the risky midnight
+		fallbackStartTime = "00:00"         // Fallback time for schedules crossing midnight; this is the first time of the day accepted by the Fiat API
 	)
 
 	hasChanged := false // track if we made any change to the schedule to avoid unnecessary API calls
@@ -132,7 +132,7 @@ func (c *Controller) configureChargeSchedule(schedule *Schedule, start time.Time
 			c.log.DEBUG.Printf("set charge schedule start: %s with default end time: %s", schedule.StartTime, schedule.EndTime)
 
 			// only enable for current day to avoid undesired charge start in the future
-			weekday := time.Now().Weekday()
+			weekday := start.Weekday()
 			schedule.ScheduledDays.Monday = (weekday == time.Monday)
 			schedule.ScheduledDays.Tuesday = (weekday == time.Tuesday)
 			schedule.ScheduledDays.Wednesday = (weekday == time.Wednesday)
